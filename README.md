@@ -49,8 +49,8 @@ v2.0.0
 ---
 
 ### NOTE
-* **LICENSING** As you have ordered script on either on these two sites https://www.sellanycode.com/ or https://www.codester.com/ for script to work you will need a valid license.
-* To get license, you must send ticket with your order ID and name of the site where you have ordered in our support portal located on https://support.marinkovic.biz
+* **LICENSING** I can provide a 3-day trial license so that you can test it fully.
+* To get a license, you must send a ticket in our support portal located at https://support.marinkovic.biz
 
 ---
 
