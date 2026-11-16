@@ -230,7 +230,8 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
             $cfgCode .= "\$smtpFrom   = " . $q($vals['smtp_from'] !== '' ? $vals['smtp_from'] : $vals['admin_email']) . ";\n\n";
             $cfgCode .= "\$cacheTime  = 180;\n";
             $cfgCode .= "\$avatarsDir = __DIR__ . '/avatars/';\n";
-            $cfgCode .= "\$mapsDir    = __DIR__ . '/maps/';\n\n";
+            $cfgCode .= "\$mapsDir    = __DIR__ . '/maps/';\n";
+            $cfgCode .= "\$queryStr   = isset(\$_SERVER['QUERY_STRING']) ? (string)\$_SERVER['QUERY_STRING'] : '';\n\n";
             $cfgCode .= "try {\n";
             $cfgCode .= "    \$pdo = new PDO('mysql:host=' . \$dbHost . ';dbname=' . \$dbName . ';charset=utf8mb4', \$dbUser, \$dbPass, array(\n";
             $cfgCode .= "        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,\n";
@@ -238,6 +239,37 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
             $cfgCode .= "    ));\n";
             $cfgCode .= "} catch (Exception \$e) {\n";
             $cfgCode .= "    die('Database connection error. Check config.php.');\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "if (!function_exists('getParam')) {\n";
+            $cfgCode .= "    function getParam(\$qs, \$key) {\n";
+            $cfgCode .= "        if (!is_string(\$qs) || \$qs === '') return '';\n";
+            $cfgCode .= "        parse_str(\$qs, \$arr);\n";
+            $cfgCode .= "        return isset(\$arr[\$key]) ? trim((string)\$arr[\$key]) : '';\n";
+            $cfgCode .= "    }\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "if (!function_exists('cleanToken')) {\n";
+            $cfgCode .= "    function cleanToken(\$raw) {\n";
+            $cfgCode .= "        return preg_replace('/[^a-zA-Z0-9_-]/', '', (string)\$raw);\n";
+            $cfgCode .= "    }\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "if (!function_exists('cleanAddr')) {\n";
+            $cfgCode .= "    function cleanAddr(\$raw) {\n";
+            $cfgCode .= "        \$s = trim((string)\$raw);\n";
+            $cfgCode .= "        if (strpos(\$s, ':') === false) return false;\n";
+            $cfgCode .= "        list(\$ip, \$port) = explode(':', \$s, 2);\n";
+            $cfgCode .= "        \$ip = trim(\$ip); \$port = (int)trim(\$port);\n";
+            $cfgCode .= "        if (\$ip === '' || \$port < 1 || \$port > 65535) return false;\n";
+            $cfgCode .= "        if (!filter_var(\$ip, FILTER_VALIDATE_IP) && !preg_match('/^[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/', \$ip)) return false;\n";
+            $cfgCode .= "        \$obj = new stdClass(); \$obj->ip = \$ip; \$obj->port = \$port; \$obj->addr = \$ip . ':' . \$port;\n";
+            $cfgCode .= "        return \$obj;\n";
+            $cfgCode .= "    }\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "if (!function_exists('sendSmtpMail')) {\n";
+            $cfgCode .= "    function sendSmtpMail(\$to, \$subject, \$body) {\n";
+            $cfgCode .= "        global \$smtpFrom;\n";
+            $cfgCode .= "        \$hdrs = 'From: ' . (\$smtpFrom !== '' ? \$smtpFrom : 'noreply@localhost') . \"\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\";\n";
+            $cfgCode .= "        return @mail(\$to, \$subject, \$body, \$hdrs);\n";
+            $cfgCode .= "    }\n";
             $cfgCode .= "}\n";
 
             if (@file_put_contents($configFile, $cfgCode) === false) {
