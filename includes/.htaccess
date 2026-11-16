@@ -1,0 +1,11 @@
+# Block directory listing
+Options -Indexes
+
+# Deny all direct HTTP/HTTPS access (Apache 2.4+ & 2.2 compatible)
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
