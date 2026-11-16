@@ -62,7 +62,7 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
     if ($vals['license_key'] === '' || strtoupper($vals['license_key']) === 'GT-XXXX-XXXX-XXXX') {
         $installErrors[] = 'Please enter a valid Product License Key.';
     }
-    if ($vals['base_url'] === '' || !preg_match('/^https?:\/\//i', $vals['base_url'])) {
+    if (!preg_match('/^https?:\/\//i', $vals['base_url'])) {
         $installErrors[] = 'Base URL must start with http:// or https://';
     } else {
         $vals['base_url'] = rtrim($vals['base_url'], '/') . '/';
@@ -70,7 +70,7 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
     if ($vals['db_host'] === '' || $vals['db_name'] === '' || $vals['db_user'] === '') {
         $installErrors[] = 'MySQL Host, Database Name, and Database Username are required.';
     }
-    if (strlen($vals['admin_user']) < 3 || !preg_match('/^[a-zA-Z0-9_-]+$/', $vals['admin_user'])) {
+    if (!preg_match('/^[a-zA-Z0-9_-]{3,32}$/', $vals['admin_user'])) {
         $installErrors[] = 'Admin username must be 3+ characters (letters, numbers, _ or -).';
     }
     if (!filter_var($vals['admin_email'], FILTER_VALIDATE_EMAIL)) {
@@ -163,6 +163,22 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
                 expires_at INT NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
+            
+            $pdoTest->exec("CREATE TABLE IF NOT EXISTS payments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id VARCHAR(120) NOT NULL DEFAULT '',
+                tx_id VARCHAR(120) NOT NULL DEFAULT '',
+                username VARCHAR(64) NOT NULL DEFAULT '',
+                item_type VARCHAR(32) NOT NULL DEFAULT '',
+                target VARCHAR(100) NOT NULL DEFAULT '',
+                target_id VARCHAR(100) NOT NULL DEFAULT '',
+                days INT NOT NULL DEFAULT 7,
+                amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+                status VARCHAR(32) NOT NULL DEFAULT 'completed',
+                created_at INT NOT NULL DEFAULT 0
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
             $pdoTest->exec("CREATE TABLE IF NOT EXISTS transactions (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 tx_ref VARCHAR(120) NOT NULL DEFAULT '',
@@ -175,6 +191,32 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
                 status VARCHAR(32) NOT NULL DEFAULT 'completed',
                 created_at INT NOT NULL DEFAULT 0
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+            
+            $pdoTest->exec("CREATE TABLE IF NOT EXISTS payments (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id VARCHAR(120) NOT NULL DEFAULT '',
+                tx_id VARCHAR(120) NOT NULL DEFAULT '',
+                username VARCHAR(64) NOT NULL DEFAULT '',
+                item_type VARCHAR(32) NOT NULL DEFAULT '',
+                target VARCHAR(100) NOT NULL DEFAULT '',
+                target_id VARCHAR(100) NOT NULL DEFAULT '',
+                days INT NOT NULL DEFAULT 7,
+                amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+                currency VARCHAR(10) NOT NULL DEFAULT 'USD',
+                status VARCHAR(32) NOT NULL DEFAULT 'completed',
+                created_at INT NOT NULL DEFAULT 0
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+            $pdoTest->exec("CREATE TABLE IF NOT EXISTS server_reviews (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                server_addr VARCHAR(100) NOT NULL,
+                username VARCHAR(64) NOT NULL,
+                rating TINYINT NOT NULL DEFAULT 5,
+                comment TEXT,
+                created_at INT NOT NULL DEFAULT 0,
+                KEY idx_srv (server_addr)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
             $nowTs   = time();
             $admHash = password_hash($vals['admin_pass'], PASSWORD_DEFAULT);
             $uStmt   = $pdoTest->prepare("INSERT INTO users (username, email, password_hash, role, verified, created_at)
@@ -217,61 +259,102 @@ if (isset($_POST['run_install']) && !$alreadyInstalled) {
             };
 
             $cfgCode  = "<?php\n";
-            $cfgCode .= "\$licenseKey = " . $q($vals['license_key']) . ";\n";
-            $cfgCode .= "\$baseUrl    = " . $q($vals['base_url']) . ";\n";
-            $cfgCode .= "\$dbHost     = " . $q($vals['db_host']) . ";\n";
-            $cfgCode .= "\$dbName     = " . $q($vals['db_name']) . ";\n";
-            $cfgCode .= "\$dbUser     = " . $q($vals['db_user']) . ";\n";
-            $cfgCode .= "\$dbPass     = " . $q($vals['db_pass']) . ";\n\n";
-            $cfgCode .= "\$smtpHost   = " . $q($vals['smtp_host']) . ";\n";
-            $cfgCode .= "\$smtpPort   = " . (int)$vals['smtp_port'] . ";\n";
-            $cfgCode .= "\$smtpUser   = " . $q($vals['smtp_user']) . ";\n";
-            $cfgCode .= "\$smtpPass   = " . $q($vals['smtp_pass']) . ";\n";
-            $cfgCode .= "\$smtpFrom   = " . $q($vals['smtp_from'] !== '' ? $vals['smtp_from'] : $vals['admin_email']) . ";\n\n";
-            $cfgCode .= "\$cacheTime  = 180;\n";
-            $cfgCode .= "\$avatarsDir = __DIR__ . '/avatars/';\n";
-            $cfgCode .= "\$mapsDir    = __DIR__ . '/maps/';\n";
-            $cfgCode .= "\$queryStr   = isset(\$_SERVER['QUERY_STRING']) ? (string)\$_SERVER['QUERY_STRING'] : '';\n\n";
+            $cfgCode .= "\$dot         = chr(46);\n";
+            $cfgCode .= "\$dbHost      = " . $q($vals['db_host']) . ";\n";
+            $cfgCode .= "\$dbName      = " . $q($vals['db_name']) . ";\n";
+            $cfgCode .= "\$dbUser      = " . $q($vals['db_user']) . ";\n";
+            $cfgCode .= "\$dbPass      = " . $q($vals['db_pass']) . ";\n";
+            $cfgCode .= "\$licenseKey  = " . $q($vals['license_key']) . ";\n";
+            $cfgCode .= "\$avatarsDir  = __DIR__ . '/avatars/';\n";
+            $cfgCode .= "\$mapsDir     = __DIR__ . '/maps/';\n";
+            $cfgCode .= "\$cacheTime   = 60;\n";
+            $cfgCode .= "\$defaultSeed = '';\n";
+            $cfgCode .= "\$baseUrl     = " . $q($vals['base_url']) . ";\n\n";
+            $cfgCode .= "\$adminUsers  = array(" . $q($vals['admin_user']) . ");\n\n";
+            $cfgCode .= "\$smtpHost    = " . $q($vals['smtp_host']) . ";\n";
+            $cfgCode .= "\$smtpPort    = " . (int)$vals['smtp_port'] . ";\n";
+            $cfgCode .= "\$smtpUser    = " . $q($vals['smtp_user']) . ";\n";
+            $cfgCode .= "\$smtpPass    = " . $q($vals['smtp_pass']) . ";\n";
+            $cfgCode .= "\$smtpFrom    = " . $q($vals['smtp_from'] !== '' ? $vals['smtp_from'] : $vals['admin_email']) . ";\n";
+            $cfgCode .= "\$fromEmail   = \$smtpFrom;\n";
+            $cfgCode .= "\$fromName    = 'GameTracker';\n\n";
             $cfgCode .= "try {\n";
-            $cfgCode .= "    \$pdo = new PDO('mysql:host=' . \$dbHost . ';dbname=' . \$dbName . ';charset=utf8mb4', \$dbUser, \$dbPass, array(\n";
+            $cfgCode .= "    \$dsn = 'mysql:host=' . \$dbHost . ';dbname=' . \$dbName . ';charset=utf8mb4';\n";
+            $cfgCode .= "    \$pdo = new PDO(\$dsn, \$dbUser, \$dbPass, array(\n";
             $cfgCode .= "        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,\n";
             $cfgCode .= "        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_OBJ\n";
             $cfgCode .= "    ));\n";
             $cfgCode .= "} catch (Exception \$e) {\n";
-            $cfgCode .= "    die('Database connection error. Check config.php.');\n";
+            $cfgCode .= "    die('Database connection failed.');\n";
             $cfgCode .= "}\n\n";
-            $cfgCode .= "if (!function_exists('getParam')) {\n";
-            $cfgCode .= "    function getParam(\$qs, \$key) {\n";
-            $cfgCode .= "        if (!is_string(\$qs) || \$qs === '') return '';\n";
-            $cfgCode .= "        parse_str(\$qs, \$arr);\n";
-            $cfgCode .= "        return isset(\$arr[\$key]) ? trim((string)\$arr[\$key]) : '';\n";
-            $cfgCode .= "    }\n";
+            $cfgCode .= "\$queryStr = isset(\$_SERVER['QUERY_STRING']) ? (string)\$_SERVER['QUERY_STRING'] : '';\n";
+            $cfgCode .= "\$alertMsg = '';\n\n";
+            $cfgCode .= "function getParam(\$qs, \$key) {\n";
+            $cfgCode .= "    if (isset(\$_POST[\$key])) return (string)\$_POST[\$key];\n";
+            $cfgCode .= "    if (isset(\$_GET[\$key])) return (string)\$_GET[\$key];\n";
+            $cfgCode .= "    if (strlen(\$qs) === 0) return '';\n";
+            $cfgCode .= "    parse_str(\$qs, \$arr);\n";
+            $cfgCode .= "    return isset(\$arr[\$key]) ? (string)\$arr[\$key] : '';\n";
             $cfgCode .= "}\n\n";
-            $cfgCode .= "if (!function_exists('cleanToken')) {\n";
-            $cfgCode .= "    function cleanToken(\$raw) {\n";
-            $cfgCode .= "        return preg_replace('/[^a-zA-Z0-9_-]/', '', (string)\$raw);\n";
+            $cfgCode .= "function getVisitorIP() {\n";
+            $cfgCode .= "    if (!empty(\$_SERVER['HTTP_CF_CONNECTING_IP'])) return trim(\$_SERVER['HTTP_CF_CONNECTING_IP']);\n";
+            $cfgCode .= "    if (!empty(\$_SERVER['HTTP_X_FORWARDED_FOR'])) {\n";
+            $cfgCode .= "        \$parts = explode(',', \$_SERVER['HTTP_X_FORWARDED_FOR']);\n";
+            $cfgCode .= "        return trim(current(\$parts));\n";
             $cfgCode .= "    }\n";
+            $cfgCode .= "    return isset(\$_SERVER['REMOTE_ADDR']) ? trim(\$_SERVER['REMOTE_ADDR']) : '0.0.0.0';\n";
             $cfgCode .= "}\n\n";
             $cfgCode .= "if (!function_exists('cleanAddr')) {\n";
             $cfgCode .= "    function cleanAddr(\$raw) {\n";
-            $cfgCode .= "        \$s = trim((string)\$raw);\n";
-            $cfgCode .= "        if (strpos(\$s, ':') === false) return false;\n";
-            $cfgCode .= "        list(\$ip, \$port) = explode(':', \$s, 2);\n";
-            $cfgCode .= "        \$ip = trim(\$ip); \$port = (int)trim(\$port);\n";
-            $cfgCode .= "        if (\$ip === '' || \$port < 1 || \$port > 65535) return false;\n";
-            $cfgCode .= "        if (!filter_var(\$ip, FILTER_VALIDATE_IP) && !preg_match('/^[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$/', \$ip)) return false;\n";
-            $cfgCode .= "        \$obj = new stdClass(); \$obj->ip = \$ip; \$obj->port = \$port; \$obj->addr = \$ip . ':' . \$port;\n";
-            $cfgCode .= "        return \$obj;\n";
+            $cfgCode .= "        \$raw   = trim((string)\$raw);\n";
+            $cfgCode .= "        \$parts = explode(':', \$raw);\n";
+            $cfgCode .= "        if (count(\$parts) !== 2) return false;\n";
+            $cfgCode .= "        \$ip   = trim(current(\$parts));\n";
+            $cfgCode .= "        \$port = (int)trim(end(\$parts));\n";
+            $cfgCode .= "        if (\$ip === '' || !preg_match('/^[a-zA-Z0-9.-]+$/', \$ip)) return false;\n";
+            $cfgCode .= "        if (\$port < 1 || \$port > 65535) return false;\n";
+            $cfgCode .= "        \$res = new stdClass();\n";
+            $cfgCode .= "        \$res->ip   = \$ip;\n";
+            $cfgCode .= "        \$res->host = \$ip;\n";
+            $cfgCode .= "        \$res->port = \$port;\n";
+            $cfgCode .= "        \$res->addr = \$ip . ':' . \$port;\n";
+            $cfgCode .= "        return \$res;\n";
             $cfgCode .= "    }\n";
             $cfgCode .= "}\n\n";
-            $cfgCode .= "if (!function_exists('sendSmtpMail')) {\n";
-            $cfgCode .= "    function sendSmtpMail(\$to, \$subject, \$body) {\n";
-            $cfgCode .= "        global \$smtpFrom;\n";
-            $cfgCode .= "        \$hdrs = 'From: ' . (\$smtpFrom !== '' ? \$smtpFrom : 'noreply@localhost') . \"\\r\\nContent-Type: text/plain; charset=UTF-8\\r\\n\";\n";
-            $cfgCode .= "        return @mail(\$to, \$subject, \$body, \$hdrs);\n";
+            $cfgCode .= "function cleanUser(\$u) {\n";
+            $cfgCode .= "    \$out = '';\n";
+            $cfgCode .= "    \$s   = trim((string)\$u);\n";
+            $cfgCode .= "    \$len = strlen(\$s);\n";
+            $cfgCode .= "    for (\$i = 0; \$i < \$len; \$i++) {\n";
+            $cfgCode .= "        \$ch = substr(\$s, \$i, 1);\n";
+            $cfgCode .= "        if (ctype_alnum(\$ch) || \$ch === '_' || \$ch === '-') \$out .= \$ch;\n";
             $cfgCode .= "    }\n";
-            $cfgCode .= "}\n";
-
+            $cfgCode .= "    return \$out;\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "function cleanToken(\$t) {\n";
+            $cfgCode .= "    \$out = '';\n";
+            $cfgCode .= "    \$s   = trim((string)\$t);\n";
+            $cfgCode .= "    \$len = strlen(\$s);\n";
+            $cfgCode .= "    for (\$i = 0; \$i < \$len; \$i++) {\n";
+            $cfgCode .= "        \$ch = substr(\$s, \$i, 1);\n";
+            $cfgCode .= "        if (ctype_xdigit(\$ch)) \$out .= \$ch;\n";
+            $cfgCode .= "    }\n";
+            $cfgCode .= "    return \$out;\n";
+            $cfgCode .= "}\n\n";
+            $cfgCode .= "function byteAt(\$str, \$idx) { return ord(substr(\$str, \$idx, 1)); }\n\n";
+            $cfgCode .= "\$visitorIp   = getVisitorIP();\n";
+            $cfgCode .= "\$isAdmin     = false;\n";
+            $cfgCode .= "\$dbFile      = 'mysql';\n";
+            $cfgCode .= "\$playersFile = 'mysql';\n";
+            $cfgCode .= "\$ppMode      = 'sandbox';\n";
+            $cfgCode .= "\$ppClientId  = '';\n";
+            $cfgCode .= "\$ppSecret    = '';\n";
+            $cfgCode .= "\$ppCurrency  = 'USD';\n";
+            $cfgCode .= "\$vipPlans    = array(\n";
+            $cfgCode .= "    '7'  => array('days' => 7,  'price' => '5.00',  'label' => '7 Days VIP'),\n";
+            $cfgCode .= "    '14' => array('days' => 14, 'price' => '9.00',  'label' => '14 Days VIP'),\n";
+            $cfgCode .= "    '30' => array('days' => 30, 'price' => '15.00', 'label' => '30 Days VIP')\n";
+            $cfgCode .= ");\n\n";
             if (@file_put_contents($configFile, $cfgCode) === false) {
                 $installErrors[] = 'Failed to write config.php. Check folder write permissions.';
             } else {
@@ -450,3 +533,4 @@ input:focus{outline:none;border-color:#39ff14;}
 </div>
 </body>
 </html>
+
