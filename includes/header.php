@@ -1,4 +1,25 @@
 <?php
+if (empty($isAdmin) && !empty($currentUser) && isset($pdo) && is_object($pdo)) {
+    try {
+        $st = $pdo->prepare("SELECT * FROM users WHERE username = ? LIMIT 1");
+        $st->execute(array((string)$currentUser));
+        $uRow = $st->fetch();
+        if ($uRow && ((isset($uRow->role) && strtolower((string)$uRow->role) === "admin") || (!empty($uRow->is_admin)))) {
+            $isAdmin = true;
+        }
+    } catch (Exception $e) {}
+}
+$dot = chr(46);
+if (!isset($baseUrl) && file_exists(dirname(__DIR__) . "/config" . $dot . "php")) {
+    require_once dirname(__DIR__) . "/config" . $dot . "php";
+    require_once dirname(__DIR__) . "/core/auth" . $dot . "php";
+}
+if (!isset($baseUrl))     $baseUrl     = "/";
+if (!isset($currentUser)) $currentUser = "";
+if (!isset($isAdmin))     $isAdmin     = false;
+if (!isset($alertMsg))    $alertMsg    = "";
+if (!isset($pageTitle))   $pageTitle   = "GameTracker Server List";
+if (!isset($activeNav))   $activeNav   = "home";
 $dot          = chr(46);
 $navTitle     = isset($pageTitle) ? (string)$pageTitle : 'GameTracker Server List';
 $curNav       = isset($activeNav) ? (string)$activeNav : 'hub';
@@ -109,7 +130,7 @@ tr.vip-row td{background:rgba(255,208,0,0.06);border-bottom-color:rgba(255,208,0
         <a href="<?php echo htmlspecialchars($advertiseUrl); ?>" <?php echo ($curNav === 'advertise') ? 'class="active"' : ''; ?>>Advertise</a>
     </div>
     <div class="nav-links">
-        <?php if (strlen($currentUser) > 0): ?>
+        <?php if (strlen((string)$currentUser) > 0): ?>
             <a href="<?php echo htmlspecialchars($profileUrl); ?>" <?php echo ($curNav === 'profile') ? 'class="active"' : ''; ?>>Profile (<?php echo htmlspecialchars($currentUser); ?>)</a>
             <?php if ($isAdmin): ?>
                 <a href="<?php echo htmlspecialchars($adminUrl); ?>" <?php echo ($curNav === 'admin') ? 'class="active"' : ''; ?> style="color:#ffd000;">Admin Panel</a>
@@ -136,6 +157,6 @@ tr.vip-row td{background:rgba(255,208,0,0.06);border-bottom-color:rgba(255,208,0
     </div>
 <?php endif; ?>
 <div class="container">
-<?php if (strlen($alertMsg) > 0): ?>
+<?php if (strlen((string)$alertMsg) > 0): ?>
     <div class="alert"><?php echo htmlspecialchars($alertMsg); ?></div>
 <?php endif; ?>
