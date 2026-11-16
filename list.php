@@ -89,6 +89,53 @@ if (isset($_POST['claim_server'])) {
     }
 }
 
+if (!function_exists('getServerClaimCode')) {
+    function getServerClaimCode($username, $addr, $secretSalt) {
+        return 'GT-' . strtoupper(substr(hash('sha256', 'gt_claim|' . strtolower(trim((string)$username)) . '|' . trim((string)$addr) . '|' . (string)$secretSalt), 0, 6));
+    }
+}
+
+if (isset($_POST['claim_verify_server'])) {
+    $cAddr = trim((string)(isset($_POST['claim_addr']) ? $_POST['claim_addr'] : ''));
+    $cPars = cleanAddr($cAddr);
+    if (strlen((string)$currentUser) === 0) {
+        $alertMsg = 'Please log in to claim and verify a server.';
+    } elseif ($cPars && isset($db->{$cPars->addr})) {
+        $k = $cPars->addr;
+        if (!empty($db->$k->claimed) && strlen((string)$db->$k->owner) > 0 && strtolower((string)$db->$k->owner) !== strtolower((string)$currentUser)) {
+            $alertMsg = 'This server has already been verified and claimed by another owner.';
+        } else {
+            $expectedCode = getServerClaimCode($currentUser, $k, isset($dbPass) ? $dbPass : 'gt_salt');
+            $db->$k = refreshServer($db->$k, true);
+            $liveName = isset($db->$k->name) ? (string)$db->$k->name : '';
+            if (!empty($db->$k->online) && stripos($liveName, $expectedCode) !== false) {
+                $db->$k->owner   = (string)$currentUser;
+                $db->$k->claimed = 1;
+                saveDB($db);
+                $alertMsg = 'Ownership verified! You are now the Verified Owner of ' . $k . '. You may remove [' . $expectedCode . '] from your server hostname.';
+            } elseif (empty($db->$k->online)) {
+                $alertMsg = 'Verification failed: Server ' . $k . ' did not respond to live query. Make sure the server is online and try again.';
+            } else {
+                $alertMsg = 'Verification failed: Code [' . $expectedCode . '] was not found in live server hostname ("' . htmlspecialchars($liveName) . '"). Add [' . $expectedCode . '] to your server name and click Verify again.';
+            }
+        }
+    }
+}
+
+if (isset($_POST['release_server_claim'])) {
+    $rAddr = trim((string)(isset($_POST['release_addr']) ? $_POST['release_addr'] : ''));
+    $rPars = cleanAddr($rAddr);
+    if ($rPars && isset($db->{$rPars->addr})) {
+        $k = $rPars->addr;
+        if ($isAdmin || (strlen((string)$currentUser) > 0 && strtolower((string)$db->$k->owner) === strtolower((string)$currentUser))) {
+            $db->$k->owner   = '';
+            $db->$k->claimed = 0;
+            saveDB($db);
+            $alertMsg = 'Server ownership released for ' . $k . '.';
+        }
+    }
+}
+
 if (isset($_POST['edit_server_details'])) {
     $eAddr = trim((string)(isset($_POST['edit_addr']) ? $_POST['edit_addr'] : ''));
     $ePars = cleanAddr($eAddr);
@@ -292,6 +339,89 @@ include __DIR__ . '/includes/header' . $dot . 'php';
             <div class="stat-box"><div class="stat-num"><?php echo (int)$detailSrv->votes; ?></div><div class="stat-lbl">Monthly Votes</div></div>
         </div>
     </div>
+<?php if ($canManage): ?>
+        <div class="card" style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <h3 style="margin:0;color:#39ff14;">Server Manager Settings</h3>
+                <a class="btn-del" href="<?php echo htmlspecialchars($listUrl . '?del=' . urlencode($detailSrv->addr)); ?>" onclick="return confirm('Delete this server permanently?');">Delete Server</a>
+            </div>
+            <form method="post" action="<?php echo htmlspecialchars($listUrl . '?server=' . urlencode($detailSrv->addr)); ?>">
+                <input type="hidden" name="edit_addr" value="<?php echo htmlspecialchars($detailSrv->addr); ?>">
+                <div class="grid-2" style="margin-bottom:10px;">
+                    <div>
+                        <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Website URL</label>
+                        <input type="text" name="srv_website" value="<?php echo htmlspecialchars(isset($detailSrv->website) ? $detailSrv->website : ''); ?>" placeholder="https://..." style="width:100%;">
+                    </div>
+                    <div>
+                        <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Discord Invite URL</label>
+                        <input type="text" name="srv_discord" value="<?php echo htmlspecialchars(isset($detailSrv->discord) ? $detailSrv->discord : ''); ?>" placeholder="https://discord.gg..." style="width:100%;">
+                    </div>
+                </div>
+                <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Server Description</label>
+                <textarea name="srv_desc" rows="3" style="width:100%;margin-bottom:10px;"><?php echo htmlspecialchars(isset($detailSrv->description) ? $detailSrv->description : ''); ?></textarea>
+                <?php if ($isAdmin): ?>
+                    <div style="margin-bottom:10px;">
+                        <label style="color:#ffd000;font-size:12px;">Admin VIP Boost: </label>
+                        <select name="vip_days">
+                            <option value="0">-- Keep Current --</option>
+                            <option value="7">Grant 7 Days VIP</option>
+                            <option value="30">Grant 30 Days VIP</option>
+                            <option value="-1">Remove VIP</option>
+                        </select>
+                    </div>
+                <?php endif; ?>
+                <button type="submit" name="edit_server_details" value="1" class="btn">Save Server Profile</button>
+            </form>
+            <?php if (!empty($detailSrv->claimed) || strlen((string)$detailSrv->owner) > 0): ?>
+                <div style="margin-top:12px;padding-top:10px;border-top:1px solid #243b28;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                    <span style="font-size:12px;color:#39ff14;">&#10004; Verified Owner: <strong><?php echo htmlspecialchars((string)$detailSrv->owner); ?></strong></span>
+                    <form method="post" action="<?php echo htmlspecialchars($listUrl . '?server=' . urlencode($detailSrv->addr)); ?>" onsubmit="return confirm('Release verified ownership of this server?');" style="margin:0;">
+                        <input type="hidden" name="release_addr" value="<?php echo htmlspecialchars($detailSrv->addr); ?>">
+                        <button type="submit" name="release_server_claim" value="1" class="btn btn-dark" style="font-size:11px;padding:4px 10px;">Release Ownership</button>
+                    </form>
+                </div>
+            <?php else: ?>
+                <?php $myClaimCode = getServerClaimCode($currentUser, $detailSrv->addr, isset($dbPass) ? $dbPass : 'gt_salt'); ?>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid #243b28;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+                        <strong style="color:#39ff14;font-size:13px;">&#128737; Verify Hostname Ownership</strong>
+                        <span style="font-size:11px;color:#8fb394;background:#0d1a10;padding:2px 8px;border:1px solid #243b28;border-radius:3px;">Unclaimed Server</span>
+                    </div>
+                    <p style="font-size:12px;color:#cfe0d2;margin:0 0 8px;">Add <code style="background:#08120a;color:#ffd000;padding:2px 6px;border:1px solid #2d5a34;border-radius:3px;font-weight:bold;">[<?php echo htmlspecialchars($myClaimCode); ?>]</code> anywhere in your live server hostname, wait 5&ndash;10 seconds, then click verify:</p>
+                    <form method="post" action="<?php echo htmlspecialchars($listUrl . '?server=' . urlencode($detailSrv->addr)); ?>" style="margin:0;">
+                        <input type="hidden" name="claim_addr" value="<?php echo htmlspecialchars($detailSrv->addr); ?>">
+                        <button type="submit" name="claim_verify_server" value="1" class="btn" style="font-size:12px;padding:6px 12px;">&#10004; Verify Hostname &amp; Claim Server</button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </div>
+    <?php elseif (empty($detailSrv->claimed) && strlen((string)$detailSrv->owner) === 0): ?>
+        <div class="card" style="margin-bottom:16px;border-color:#2d5a34;">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
+                <h3 style="margin:0;color:#39ff14;font-size:15px;">&#128737; Claim &amp; Verify Server Ownership</h3>
+                <span style="font-size:11px;color:#8fb394;background:#0d1a10;padding:3px 8px;border:1px solid #243b28;border-radius:3px;">Unclaimed Server</span>
+            </div>
+            <?php if (strlen((string)$currentUser) > 0): ?>
+                <?php $myClaimCode = getServerClaimCode($currentUser, $detailSrv->addr, isset($dbPass) ? $dbPass : 'gt_salt'); ?>
+                <p style="font-size:13px;color:#cfe0d2;margin:0 0 10px;">Are you the owner of <strong><?php echo htmlspecialchars($detailSrv->addr); ?></strong>? Verify ownership in 3 quick steps to unlock custom Website/Discord links, description editing, and the Verified Owner badge:</p>
+                <ol style="font-size:12px;color:#8fb394;margin:0 0 12px;padding-left:18px;line-height:1.7;">
+                    <li>Temporarily add <code style="background:#08120a;color:#ffd000;padding:2px 6px;border:1px solid #2d5a34;border-radius:3px;font-weight:bold;">[<?php echo htmlspecialchars($myClaimCode); ?>]</code> anywhere in your live server hostname.</li>
+                    <li>Wait 5&ndash;10 seconds for your game server to update its query name.</li>
+                    <li>Click <strong>Verify Hostname &amp; Claim Server</strong> below. Once verified, you can remove the code from your server name.</li>
+                </ol>
+                <form method="post" action="<?php echo htmlspecialchars($listUrl . '?server=' . urlencode($detailSrv->addr)); ?>">
+                    <input type="hidden" name="claim_addr" value="<?php echo htmlspecialchars($detailSrv->addr); ?>">
+                    <button type="submit" name="claim_verify_server" value="1" class="btn">&#10004; Verify Hostname &amp; Claim Server</button>
+                </form>
+            <?php else: ?>
+                <p style="font-size:13px;color:#8fb394;margin:0;">Are you the administrator of this server? <a href="<?php echo htmlspecialchars($baseUrl . 'login' . $dot . 'php'); ?>" style="color:#39ff14;font-weight:bold;">Log in</a> or <a href="<?php echo htmlspecialchars($baseUrl . 'register' . $dot . 'php'); ?>" style="color:#39ff14;font-weight:bold;">create a free account</a> to verify hostname ownership and customize this server page.</p>
+            <?php endif; ?>
+        </div>
+    <?php elseif (!empty($detailSrv->claimed) && strlen((string)$detailSrv->owner) > 0): ?>
+        <div style="margin-top:12px;padding:8px 12px;background:rgba(57,255,20,0.06);border:1px solid #243b28;border-radius:4px;font-size:12px;color:#8fb394;">
+            <span style="color:#39ff14;font-weight:bold;">&#10004; Verified Server</span> &mdash; Managed by <strong><?php echo htmlspecialchars((string)$detailSrv->owner); ?></strong>
+        </div>
+    <?php endif; ?>
     <div class="grid-2">
         <div class="card" style="margin-bottom:0;">
             <h3 style="margin-top:0;color:#39ff14;">Map Rotation Share</h3>
@@ -584,41 +714,7 @@ include __DIR__ . '/includes/header' . $dot . 'php';
         </div>
     <?php endif; ?>
 
-    <?php if ($canManage): ?>
-        <div class="card">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <h3 style="margin:0;color:#39ff14;">Server Manager Settings</h3>
-                <a class="btn-del" href="<?php echo htmlspecialchars($listUrl . '?del=' . urlencode($detailSrv->addr)); ?>" onclick="return confirm('Delete this server permanently?');">Delete Server</a>
-            </div>
-            <form method="post" action="<?php echo htmlspecialchars($listUrl . '?server=' . urlencode($detailSrv->addr)); ?>">
-                <input type="hidden" name="edit_addr" value="<?php echo htmlspecialchars($detailSrv->addr); ?>">
-                <div class="grid-2" style="margin-bottom:10px;">
-                    <div>
-                        <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Website URL</label>
-                        <input type="text" name="srv_website" value="<?php echo htmlspecialchars(isset($detailSrv->website) ? $detailSrv->website : ''); ?>" placeholder="https://..." style="width:100%;">
-                    </div>
-                    <div>
-                        <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Discord Invite URL</label>
-                        <input type="text" name="srv_discord" value="<?php echo htmlspecialchars(isset($detailSrv->discord) ? $detailSrv->discord : ''); ?>" placeholder="https://discord.gg..." style="width:100%;">
-                    </div>
-                </div>
-                <label style="display:block;color:#8fb394;font-size:12px;margin-bottom:4px;">Server Description</label>
-                <textarea name="srv_desc" rows="3" style="width:100%;margin-bottom:10px;"><?php echo htmlspecialchars(isset($detailSrv->description) ? $detailSrv->description : ''); ?></textarea>
-                <?php if ($isAdmin): ?>
-                    <div style="margin-bottom:10px;">
-                        <label style="color:#ffd000;font-size:12px;">Admin VIP Boost: </label>
-                        <select name="vip_days">
-                            <option value="0">-- Keep Current --</option>
-                            <option value="7">Grant 7 Days VIP</option>
-                            <option value="30">Grant 30 Days VIP</option>
-                            <option value="-1">Remove VIP</option>
-                        </select>
-                    </div>
-                <?php endif; ?>
-                <button type="submit" name="edit_server_details" value="1" class="btn">Save Server Profile</button>
-            </form>
-        </div>
-    <?php endif; ?>
+    
 <?php else: ?>
     <?php
         $perPage    = 15;
