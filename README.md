@@ -1,13 +1,13 @@
 # GameTracker Server List & Stats Platform
 
-A complete, lightweight PHP & MySQL multi-game server list, live player statistics tracker, dynamic PNG banner & HTML widget generator, JSON API, and dual-monetization platform.
+A complete, lightweight PHP & MySQL multi-game server list, live player statistics tracker, dynamic PNG banner generator, and dual-monetization platform.
 
 ![Project Screenshot](images/gt1.jpg)
 
 ---
 
 ## Script Version
-v2.0.0
+v2.1.0
 
 ---
 
@@ -37,23 +37,22 @@ v2.0.0
 
 ## Key Features
 * **20-Game Visual Hub & Dedicated Game Lists (`index.php` & `games/`):** Interactive Games Hub with live online server/player counters per game plus dedicated per-game server pages (`games/cs16_list.php`, `games/rust_list.php`, etc.) with 15-per-page pagination.
-* **Live Server Queries, 24h Graphs & Peak Activity Heatmap (`list.php`):** Queries game servers via UDP/TCP/HTTP/REST, tracks online/offline uptime percentages, records 24-hour player history bar graphs, renders a **7-Day × 24-Hour UTC Peak Activity Heatmap** with automatic busiest-window detection, and tracks map rotation shares.
-* **Real-Time Server Ping / Latency Tester (`ping.php` & `list.php`):** 1-click **Test Ping** button on every server detail page measuring multi-sample browser-to-edge and host socket response latency (`ms`) with color-coded quality badges.
-* **Server Claiming, Hostname Verification & Fleet Dashboard (`my_servers.php` & `list.php`):** Server owners can verify ownership via a unique `[GT-XXXXXX]` hostname tag, unlock Verified Owner badges and custom Discord/website links, and manage their entire multi-server network from the **Server Owner Fleet Dashboard** (`my_servers.php`) with aggregated KPIs and 1-click **Refresh All**.
-* **Player Watchlist / Favorites (`list.php`):** 1-click `★` / `☆` bookmark stars across both the directory table and server detail pages backed by MySQL (`user_favorites`), complete with a `★ My Watchlist` quick-filter pill.
-* **Dynamic PNG Banners (`banner.php`) & Embeddable HTML Widgets (`widget.php`):** Generates live embeddable PNG banners (`560x95`, `350x20`, `160x600` in 6 color themes) plus auto-refreshing `<iframe>` live HTML widgets (`widget.php`) with direct Join/Copy IP buttons, theme presets (`green`, `gold`, `blue`), and optional live player rosters.
-* **Public JSON & Developer API (`api.php`):** CORS-enabled RESTful JSON endpoints for single server lookups (`api.php?server=IP:PORT`), filtered game leaderboards (`api.php?list=1&game=cs2&sort=players&limit=10`), and global directory statistics.
-* **Dynamic XML Sitemap & SEO (`sitemap.php`, `.htaccess`, `robots.txt`):** Auto-generates a search-engine-ready `sitemap.xml` indexing all core pages, 20 game hubs, and active server detail pages with priority weighting.
+* **Live Server Queries & Uptime Tracking:** Queries game servers via UDP/TCP/HTTP/REST, tracks online/offline uptime percentages, records 24-hour player history graphs, and tracks map rotation shares.
 * **Visual Add-Server Wizard (`add_server.php`):** Click-to-select 20-game tile grid with automatic default port hints and manual or GeoIP auto-detected country flag selection.
-* **Global Top Players Leaderboard (`players.php`) & Top 15 Voted (`top15.php`):** Tracks cumulative player kills/scores and playtime hours across all listed servers alongside daily cookie-throttled community voting.
+* **Dynamic PNG Banners (`banner.php`):** Generates live embeddable banners in `560x95`, `350x20`, and `160x600` sizes with 6 color themes (`green`, `orange`, `blue`, `red`, `purple`, `gold`), player scale axes, 24h peak counts, and custom fallback map thumbnails (`maps/no_map.png`).
+* **Global Top Players Leaderboard (`players.php`):** Tracks cumulative player kills/scores and playtime hours across all listed servers with nickname search and game filters.
+* **Top 15 Voted & Community Voting (`top15.php`):** Daily cookie-throttled community voting with automatic ranking.
+* **User Accounts & Ownership Verification (`profile.php`):** Member registration, email verification, password reset, custom avatars, Steam ID, Discord username, bio, and hostname-code server ownership claiming (`GT-XXXXXXXX`).
 * **Dual Automated Monetization (`boost.php` & `advertise.php`):** Built-in PayPal and Debit/Credit Card checkout for **VIP Server Boosts** (pinned to the top of the server list) and **160x600 Left & Right Sidebar Sponsor Banners** with automatic expiration.
 * **Full Admin Control Panel & Discord Webhooks (`admin_panel.php`):** Manage servers, VIP durations, users, PayPal REST API credentials, Discord webhook alerts, pricing tiers, ad slots, footer copyright, Terms of Service, and Privacy Policy.
 
 ---
 
-### NOTE
-* **LICENSING:** A 3-day trial license is available so you can test the full platform.
-* To request a license key, submit a ticket in our support portal at https://support.marinkovic.biz
+### LICENSING
+* GameTracker needs a valid license from **[verocoders.com](https://verocoders.com)**. Licenses are bound to one domain.
+* Without a valid license, every page shows **License Required**. The site administrator activates the key there (admin username + password + license key), or in **Admin Panel → License** once the site is running.
+* The license is re-checked with `license.verocoders.com` about once an hour (by the cron job, or on page loads if cron is not set up). If the license server is briefly unreachable, the site keeps working on the last confirmed answer.
+* To move the site to a new domain, activate the license again from the new domain (or contact Vero Coders support to transfer it).
 
 ---
 
@@ -64,8 +63,9 @@ v2.0.0
   * `pdo_mysql` (database storage)
   * `gd` (dynamic PNG banners and user avatars)
   * `curl` (license verification, map thumbnails, and PayPal REST API)
+  * `sodium` (license verification signatures; included in PHP 7.2+ on most hosts)
   * `mbstring` & `json` (UTF-8 server/player names and roster storage)
-  * `sockets` / outbound UDP & TCP enabled in firewall (for live game server queries and ping checks)
+  * `sockets` / outbound UDP & TCP enabled in firewall (for live game server queries)
 
 ---
 
@@ -81,33 +81,36 @@ v2.0.0
 3. **Run the Web Installer (`install.php`)**
    * Open `https://yourdomain.com` in your browser.
    * Verify that all **Server Environment Checks** show **PASS**.
-   * Enter your **Product License Key** (`GT-XXXX-XXXX-XXXX`), **Base URL** (including trailing slash `/`), **MySQL credentials**, and **Administrator account** details (defaults to `Admin` / `admin@admin.com` / `12345`).
+   * Enter your **License Key** (`VC-XXXXX-XXXXX-XXXXX-XXXXX`, optional here, you can also activate it after installing), **Base URL** (including trailing slash `/`), **MySQL credentials**, and **Administrator account** details (choose your own admin password, minimum 8 characters).
    * Optionally enter your **SMTP settings** for user verification and password reset emails.
    * Click **Install GameTracker Now**.
 
 4. **Post-Installation Security (Required)**
    * **Delete `install.php`** from your server immediately after installation completes.
-   * Log in with your Admin account, open **Profile**, and change the default password (`12345`) under **Account Security**.
+   * Log in with the Admin account you created in the installer.
 
 ---
 
-## Cron Job & Clean Sitemap Setup (Recommended)
-To keep server player counts, 24-hour history charts, peak activity heatmaps, map stats, and global player kills updated automatically in the background without slowing down page loads, add a cron job running every **3 to 5 minutes**:
+## Cron Job Setup (Required)
+Server status, player counts, 24-hour charts, map stats and the global player leaderboard are only updated by `cron.php`.
+After installing, open **Admin Panel → Gateways, Discord & News**. The **Server Polling (Cron Job)** box shows the exact command and URL for your site, and when the cron job last ran.
 
+Recommended (every 3 minutes, runs PHP directly):
 ```bash
-*/3 * * * * curl -s "https://yourdomain.com" > /dev/null 2>&1
+*/3 * * * * php /path/to/your/site/cron.php > /dev/null 2>&1
 ```
 
-*(Replace `https://yourdomain.com` with your actual installation URL.)*
-
-### Clean `/sitemap.xml` URL (Nginx Users)
-Apache/LiteSpeed servers automatically map `/sitemap.xml` to `sitemap.php` via `.htaccess`. If you run **Nginx** (e.g., aaPanel), add this snippet to your site's URL Rewrite rules:
-
-```nginx
-location = /sitemap.xml {
-    rewrite ^ /sitemap.php last;
-}
+If your host only allows URL cron jobs, use the private URL shown in the Admin Panel (it contains a secret `key`):
+```bash
+*/3 * * * * curl -s "https://yourdomain.com/cron.php?key=YOUR_KEY" > /dev/null 2>&1
 ```
+Calling the homepage does **not** update servers.
+
+---
+
+## Optional settings in `config.php`
+* `$trustProxyHeaders = true;` — only if the site is behind Cloudflare or another reverse proxy, so visitor IPs (used for vote limits and login throttling) are read from `CF-Connecting-IP` / `X-Forwarded-For`. Leave `false` otherwise, because those headers can be faked.
+* `$allowPrivateServers = true;` — only if you want to list game servers on LAN/private IP addresses. By default they are rejected so visitors cannot make the tracker probe your internal network.
 
 ---
 
@@ -122,17 +125,12 @@ location = /sitemap.xml {
 
 ## Directory Structure
 * `index.php` — 20-game interactive Games Hub with live online counters and top servers
-* `list.php` — Paginated master server list, watchlist filter, search/filters, and server detail analytics page
-* `my_servers.php` — Server Owner Fleet Dashboard with aggregated KPIs, 1-click refresh, and verified server controls
+* `list.php` — Paginated master server list, search/filters, and server detail analytics page
 * `add_server.php` — Visual 20-game tile selector and server submission page
 * `install.php` — One-click setup wizard (delete after installation)
 * `config.php` — Generated configuration and MySQL database connection file
 * `cron.php` — Background server query, uptime, and player stats updater
 * `banner.php` — Dynamic GD PNG server banner generator (`560x95`, `350x20`, `160x600`)
-* `widget.php` — Auto-refreshing embeddable HTML `<iframe>` live server widget
-* `api.php` — CORS-enabled Public JSON API for single servers, filtered leaderboards, and global stats
-* `ping.php` — Real-time browser-to-edge and game host socket latency tester
-* `sitemap.php`, `.htaccess` & `robots.txt` — Dynamic XML sitemap generator and search engine crawler directives
 * `top15.php` — Top 15 most voted servers leaderboard
 * `players.php` — Global top players leaderboard and search
 * `profile.php` — Public user profiles, avatars, and account settings
@@ -140,8 +138,53 @@ location = /sitemap.xml {
 * `advertise.php` & `paypal_ad.php` — `160x600` ad slot booking and PayPal handler
 * `admin_panel.php` — Complete site administration dashboard
 * `terms.php` & `privacy.php` — Terms of Service and Privacy Policy pages
-* `core/` — Core backend engines (`auth.php`, `servers.php`, `discord.php`, `license_check.php`)
+* `license.php` — License activation page (shown while no valid license is active)
+* `core/` — Core backend engines (`auth.php`, `servers.php`, `schema.php`, `discord.php`, `license_lib.php`, `vero_license_client.php`)
 * `includes/` — Shared header, footer, and paginated game list view (`header.php`, `footer.php`, `game_list_view.php`)
 * `games/` — Dedicated per-game server list pages (`cs16_list.php` through `insurgency_list.php`)
 * `avatars/` & `maps/` — Uploaded user avatars, cached map thumbnails, and custom fallback image (`no_map.png`)
 
+---
+
+## Changelog
+
+### v2.1.0
+**Licensing**
+* New Vero Coders license system (`license.verocoders.com`): signed license answers, domain-bound keys (`VC-XXXXX-XXXXX-XXXXX-XXXXX`), hourly re-check, offline tolerance and an expiry warning in the Admin Panel.
+* New **License Required** page with activation form, and a **License** tab in the Admin Panel.
+
+**Fixes**
+* PayPal and Stripe checkout now call the correct API addresses (`api-m.paypal.com` / `api-m.sandbox.paypal.com` and `api.stripe.com`). Before, no payment could be created.
+* Payments are saved correctly. The v2.0 installer created a `payments` table without the `server_addr` column, so every paid order failed after payment. Existing databases are repaired automatically.
+* A payment can only be applied once. Before, reloading the PayPal/Stripe return page could add VIP time again.
+* Country flags work again (GeoIP lookup URL was broken, so every server showed "unknown").
+* BattleMetrics fallback works again for ARK, Rust, DayZ, Palworld, L4D2 and Terraria (URL was broken).
+* Source engine player lists are read correctly.
+* Server links from Top 15, VIP Boost, Top Players, Profile, the JSON API and Discord alerts now open the server page (they pointed to the homepage).
+* Review author links (`profile.php?u=name`) now open that user's profile.
+* Top 15 shows the right game label for all 20 games.
+* Installer default settings now use the same names as the Admin Panel (VIP prices, PayPal mode).
+* SMTP on port 587 (STARTTLS) now works, not only port 465.
+* README cron instructions fixed (the homepage no longer polls servers).
+
+**Security**
+* Login can no longer be faked with a `cs16_user` cookie. Sessions are server-side, and "remember me" uses a signed cookie that stops working after a password change.
+* Removed the built-in `admin` / `12345` login that reset the admin password.
+* Password reset links are never shown on screen. Before, anyone could reset any account when email sending failed.
+* Login throttling: 10 failed attempts per IP per 15 minutes.
+* Login, register and password reset only accept POST, so passwords never appear in URLs or server logs.
+* Forms submitted from other websites are rejected, and delete/logout links carry a per-session token.
+* Server website/Discord links only accept `http(s)://` (blocks `javascript:` links).
+* Game servers on private/loopback IPs are rejected (prevents probing your internal network).
+* Votes are limited per IP as well as per cookie.
+* PayPal/Stripe secret keys are no longer printed into the Admin Panel page.
+* `core/` and `includes/` files return 404 when opened directly (works on Nginx, where `.htaccess` is ignored).
+
+**Performance**
+* Saving only writes the servers and columns that changed. Before, every save rewrote every server and could delete servers or votes added by another visitor at the same time.
+* Database migrations run once instead of on every page load.
+* Player stats are saved with one query per server instead of 2 per player.
+* Multi-port games (Rust, ARK, DayZ and others) find the query port with one parallel scan, and the port is remembered. Offline servers are rescanned at most every 30 minutes.
+* Cron runs can't overlap, poll the oldest servers first, and save after each server.
+* New indexes on players, servers and payments.
+* Only the logged-in user is loaded on each page, not the full user list.
